@@ -2330,7 +2330,7 @@ var qrcode = function() {
   .pin-wrap img { display: block; max-width: 100%; height: auto; border-radius: 8px; }
   .pin { position: absolute; width: 22px; height: 22px; margin: -22px 0 0 -11px; background: #e53e3e; border: 3px solid #fff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 1px 4px rgba(0,0,0,.5); pointer-events: none; }
   .photo-card img.photo { max-height: 360px; }
-  .photo-info { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 14px; line-height: 1.5; max-width: 70%; }
+  .photo-info { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 14px; line-height: 1.5; max-width: 70%; }
   .photo-qr { position: absolute; right: 8px; top: 8px; background: #fff; padding: 6px; border-radius: 6px; text-align: center; line-height: normal; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
   .photo-qr img { width: 76px; height: 76px; }
   .print-page { margin-bottom: 24px; }
@@ -2375,7 +2375,7 @@ var qrcode = function() {
     #print-area .photo-half { flex: 0 0 135mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
     #print-area .map-canvas { flex: 0 0 135mm; width: 100%; height: 135mm; margin-top: 0; border-radius: 0; }
     #print-area .photo-card { display: inline-block; }
-    #print-area .photo-info { font-size: 12pt; left: 6mm; bottom: 6mm; }
+    #print-area .photo-info { font-size: 12pt; left: 6mm; top: 6mm; bottom: auto; }
     #print-area .photo-qr { padding: 3mm; top: 6mm; right: 6mm; }
     #print-area .photo-qr img { width: 22mm; height: 22mm; }
     #print-area .print-page { margin-bottom: 0; }
@@ -2445,7 +2445,7 @@ var qrcode = function() {
       <button class="secondary" id="import-btn">นำเข้าไฟล์สำรอง</button>
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
-    <div class="toolbar"><button class="secondary" id="folder-btn">เลือกโฟลเดอร์เก็บข้อมูล (จะสร้างโฟลเดอร์ CoordData ให้)</button><span class="small" id="folder-status">ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้</span></div>
+    <div class="toolbar"><button class="secondary" id="folder-btn">เลือกโฟลเดอร์เก็บข้อมูล (จะสร้างโฟลเดอร์ CoordData ให้)</button><button class="secondary" id="change-folder-btn">เปลี่ยนโฟลเดอร์</button><span class="small" id="folder-status">ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้</span></div>
     <div class="small" id="storage-note"></div>
     <div id="history-wrap"></div>
   </section>
@@ -2959,17 +2959,20 @@ async function loadFromFolder() {
   renderHistory();
 }
 
-$('folder-btn').addEventListener('click', async () => {
+async function connectFolder(forcePick) {
   if (!window.showDirectoryPicker) {
     $('folder-status').textContent = 'ใช้ได้เฉพาะ Chrome หรือ Edge บนคอม';
     return;
   }
   try {
-    if (!dirHandle || !(await askPermission(dirHandle))) {
+    if (forcePick || !dirHandle || !(await askPermission(dirHandle))) {
       const picked = await showDirectoryPicker({ mode: 'readwrite', startIn: 'desktop' });
-      dirHandle = picked.name === FOLDER_NAME
+      const target = picked.name === FOLDER_NAME
         ? picked
         : await picked.getDirectoryHandle(FOLDER_NAME, { create: true });
+      dirHandle = target;
+      // photos must be copied into the newly chosen folder as well
+      history.forEach(h => (h.photos || []).forEach(p => delete p.file));
     }
     await idbSet('dirHandle', dirHandle);
     await loadFromFolder();
@@ -2977,9 +2980,11 @@ $('folder-btn').addEventListener('click', async () => {
     $('folder-btn').textContent = `เชื่อมต่อแล้ว: ${dirHandle.name}`;
     $('folder-status').textContent = `ข้อมูลและรูปจะถูกเก็บในโฟลเดอร์ "${dirHandle.name}" (อยู่ภายในโฟลเดอร์ที่คุณเลือก)`;
   } catch (e) {
-    $('folder-status').textContent = 'ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้';
+    if (!dirHandle) $('folder-status').textContent = 'ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้';
   }
-});
+}
+$('folder-btn').addEventListener('click', () => connectFolder(false));
+$('change-folder-btn').addEventListener('click', () => connectFolder(true));
 
 (async () => {
   try {
