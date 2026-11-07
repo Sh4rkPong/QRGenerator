@@ -2332,8 +2332,9 @@ var qrcode = function() {
   .photo-card img.photo { max-height: 360px; }
   .photo-info { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 14px; line-height: 1.5; max-width: 70%; }
   .photo-qr { position: absolute; right: 8px; top: 8px; background: #fff; padding: 6px; border-radius: 6px; text-align: center; line-height: normal; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
-  .photo-qr img { width: 76px; height: 76px; }
+  .photo-qr svg { width: 76px; height: 76px; display: block; }
   .print-page { margin-bottom: 24px; }
+  .photo-actions { margin-top: 8px; }
   .map-canvas { display: block; width: 100%; height: auto; aspect-ratio: 760 / 540; border-radius: 8px; margin-top: 12px; }
   .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
   .thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; }
@@ -2342,7 +2343,7 @@ var qrcode = function() {
   #pin-box { display: none; margin-top: 10px; }
   #pin-box img { max-height: 260px; }
   .card .qr { text-align: center; }
-  .card .qr img { width: 200px; height: 200px; }
+  .card .qr svg { width: 200px; height: 200px; display: block; margin: 0 auto; }
   .meta { font-size: 15px; line-height: 1.7; margin-top: 12px; word-break: break-all; }
   .empty { color: #888; text-align: center; padding: 60px 0; }
   .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -2358,7 +2359,7 @@ var qrcode = function() {
     header h1 { font-size: 19px; }
     .card { grid-template-columns: 1fr; }
     .row { gap: 8px; }
-    .photo-qr img { width: 64px; height: 64px; }
+    .photo-qr svg { width: 64px; height: 64px; }
     .photo-info { font-size: 13px; max-width: 75%; }
     .pin { width: 26px; height: 26px; margin: -26px 0 0 -13px; }
     .toolbar button { flex: 1 1 45%; }
@@ -2366,21 +2367,26 @@ var qrcode = function() {
     table { min-width: 560px; }
   }
   @media print {
+    body.printing > *:not(#print-area) { display: none !important; }
     @page { margin: 12mm; }
     body * { visibility: hidden; }
     #print-area, #print-area * { visibility: visible; }
     #print-area { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; padding: 0; }
-    #print-area .photo-card img.photo { max-width: 100%; max-height: 135mm; width: auto; height: auto; border-radius: 0; }
-    #print-area .print-page { height: 270mm; display: flex; flex-direction: column; }
-    #print-area .photo-half { flex: 0 0 135mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    #print-area .map-canvas { flex: 0 0 135mm; width: 100%; height: 135mm; margin-top: 0; border-radius: 0; }
+    #print-area .photo-card img.photo { max-width: 100%; max-height: 128mm; width: auto; height: auto; border-radius: 0; }
+    #print-area .print-page { height: 256mm; display: flex; flex-direction: column; overflow: hidden; }
+    #print-area .photo-half { flex: 0 0 128mm; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #print-area .map-canvas { flex: 0 0 128mm; width: 100%; height: 128mm; margin-top: 0; border-radius: 0; }
+    #print-area .print-page.photo-only .photo-half { flex: 0 0 256mm; }
+    #print-area .print-page.photo-only .photo-card img.photo { max-height: 256mm; }
+    .photo-actions { display: none !important; }
     #print-area .photo-card { display: inline-block; }
     #print-area .photo-info { font-size: 12pt; left: 6mm; top: 6mm; bottom: auto; }
     #print-area .photo-qr { padding: 3mm; top: 6mm; right: 6mm; }
-    #print-area .photo-qr img { width: 22mm; height: 22mm; }
+    #print-area { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #print-area .photo-qr svg { width: 22mm; height: 22mm; }
     #print-area .print-page { margin-bottom: 0; }
     #print-area .print-page + .print-page { break-before: page; }
-    #print-area .card .qr img { width: 60mm; height: 60mm; }
+    #print-area .card .qr svg { width: 60mm; height: 60mm; }
   }
 </style>
 </head>
@@ -2396,7 +2402,9 @@ var qrcode = function() {
 
     <label for="photo">รูปประกอบ (ไม่บังคับ)</label>
     <input type="file" id="photo" accept="image/*" multiple>
-    <div class="hint">เลือกได้หลายรูป แต่ละรูปจะพิมพ์เป็นคนละหน้า รูปจะถูกย่อขนาดอัตโนมัติ</div>
+    <div class="hint">เลือกได้หลายรูป (กด Ctrl/Cmd ค้างแล้วคลิกเลือก) หรือเลือกทีละชุดแล้วเพิ่มต่อได้ แต่ละรูปจะพิมพ์เป็นคนละหน้า</div>
+    <div class="small" id="photo-count" style="margin-top:6px"></div>
+    <button class="secondary" id="clear-photos" style="margin-top:6px">ล้างรูปที่เลือกทั้งหมด</button>
     <div id="pin-box">
       <div class="thumbs" id="thumbs"></div><div class="pin-wrap" id="pin-wrap"><img id="pin-src" alt=""><div class="pin" id="pin-marker" style="display:none"></div></div>
       <div class="hint">เลือกรูปจากแถบด้านบนแล้วคลิกบนรูปใหญ่เพื่อปักหมุด หมุดจะแสดงตอนพิมพ์</div>
@@ -2414,6 +2422,7 @@ var qrcode = function() {
     </div>
     <div class="hint">วางพิกัดจาก Google Maps ได้ทั้งแบบทศนิยม (12.599900, 102.097700) และแบบองศา (12°35'59.6"N 102°05'51.7"E) ลงช่องไหนก็ได้ ระบบจะกรอกให้ทั้งสองช่อง</div>
 
+    <label style="font-weight:normal;margin-top:10px"><input type="checkbox" id="show-info" checked> แสดงข้อมูลพิกัดและวันที่บนรูป</label>
     <label style="font-weight:normal;margin-top:10px"><input type="checkbox" id="force-new"> สร้างเป็นรายการใหม่แม้พิกัดซ้ำ (คนละบ้านในจุดเดียวกัน)</label>
     <canvas id="map-preview" class="map-canvas" width="760" height="540" style="display:none"></canvas>
     <a id="gmaps-link" target="_blank" rel="noopener" style="display:none;margin-top:8px;color:#2c5282;font-size:14px">เปิดตำแหน่งนี้ใน Google Maps</a>
@@ -2521,6 +2530,12 @@ function compressImage(file, maxSize = 900) {
 function mapsUrl(lat, lng) {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
+function qrSvg(text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag(4, 0);
+}
 function qrDataUrl(text) {
   const qr = qrcode(0, 'M');
   qr.addData(text);
@@ -2530,7 +2545,7 @@ function qrDataUrl(text) {
 function cardHtml(entry) {
   const url = mapsUrl(entry.lat, entry.lng);
   const date = new Date(entry.createdAt).toLocaleString('th-TH');
-  const qrImg = `<img src="${qrDataUrl(url)}" alt="QR Code">`;
+  const qrImg = qrSvg(url);
   const info = `
     ${entry.label ? `<div><b>${escapeHtml(entry.label)}</b></div>` : ''}
     <div>Latitude: ${entry.lat}</div>
@@ -2538,22 +2553,23 @@ function cardHtml(entry) {
     <div class="small">บันทึกเมื่อ ${date}</div>`;
   const photos = entry.photos || [];
   if (photos.length) {
-    return photos.map(p => `
-      <div class="print-page">
+    return photos.map((p, i) => `
+      <div class="print-page ${i === 0 ? '' : 'photo-only'}">
         <div class="photo-half">
           <div class="pin-wrap photo-card">
             <img class="photo" src="${p.src}" alt="รูปประกอบ">
             ${p.pin ? `<div class="pin" style="left:${p.pin.x}%;top:${p.pin.y}%"></div>` : ''}
             <div class="photo-qr">${qrImg}<div class="small">สแกนเปิด Google Maps</div></div>
-            <div class="photo-info">${info}</div>
+            ${$('show-info').checked ? `<div class="photo-info">${info}</div>` : ''}
           </div>
         </div>
-        <canvas class="map-canvas" width="760" height="540" data-lat="${entry.lat}" data-lng="${entry.lng}"></canvas>
+        ${i === 0 ? `<canvas class="map-canvas" width="760" height="540" data-lat="${entry.lat}" data-lng="${entry.lng}"></canvas>` : ''}
+        <div class="photo-actions"><button class="danger" id="del-${entry.id}-${i}" onclick="deletePhoto('${entry.id}', ${i})">ลบรูปนี้</button></div>
       </div>`).join('');
   }
   return `
     <div class="card">
-      <div class="meta">${info}<div class="small">${url}</div></div>
+      <div class="meta">${$('show-info').checked ? `${info}<div class="small">${url}</div>` : ''}</div>
       <div class="qr">${qrImg}<div class="small">สแกนเพื่อเปิดใน Google Maps</div></div>
     </div>`;
 }
@@ -2589,7 +2605,7 @@ function drawMap(canvas, lat, lng) {
       }));
     }
   }
-  Promise.all(jobs).then(() => {
+  return Promise.all(jobs).then(() => {
     ctx.beginPath();
     ctx.arc(W / 2, H / 2, 14, 0, Math.PI * 2);
     ctx.fillStyle = '#e53e3e';
@@ -2604,11 +2620,14 @@ function drawMap(canvas, lat, lng) {
   });
 }
 
+let mapsReady = Promise.resolve();
+let lastShown = null;
 function showEntry(entry) {
+  lastShown = entry;
   $('empty').style.display = 'none';
   const area = $('print-area');
   area.innerHTML = cardHtml(entry);
-  area.querySelectorAll('.map-canvas').forEach(c => drawMap(c, +c.dataset.lat, +c.dataset.lng));
+  mapsReady = Promise.all([...area.querySelectorAll('.map-canvas')].map(c => drawMap(c, +c.dataset.lat, +c.dataset.lng)));
   area.classList.add('show');
 
   $('preview-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2712,6 +2731,7 @@ function renderThumbs() {
   box.querySelectorAll('img').forEach(img => {
     img.onclick = () => { activeIdx = +img.dataset.i; showActive(); };
   });
+  $('photo-count').textContent = pendingPhotos.length ? `เลือกแล้ว ${pendingPhotos.length} รูป` : '';
 }
 function showActive() {
   const p = pendingPhotos[activeIdx];
@@ -2729,11 +2749,20 @@ function showActive() {
 }
 $('photo').addEventListener('change', async e => {
   const files = [...e.target.files];
-  pendingPhotos = [];
+  const firstNew = pendingPhotos.length;
   for (const f of files) pendingPhotos.push({ src: await compressImage(f), pin: null });
-  activeIdx = 0;
+  e.target.value = '';
+  activeIdx = firstNew;
   $('pin-box').style.display = pendingPhotos.length ? 'block' : 'none';
   if (pendingPhotos.length) showActive();
+});
+$('show-info').addEventListener('change', () => { if (lastShown) showEntry(lastShown); });
+$('clear-photos').addEventListener('click', () => {
+  pendingPhotos = [];
+  activeIdx = 0;
+  $('photo').value = '';
+  $('pin-box').style.display = 'none';
+  renderThumbs();
 });
 $('pin-wrap').addEventListener('click', e => {
   const p = pendingPhotos[activeIdx];
@@ -2786,15 +2815,57 @@ function renderHistory() {
   saveHistory();
 }
 function findEntry(id) { return history.find(h => h.id === id); }
+let pendingPhotoKey = null, pendingPhotoTimer = null;
+async function deletePhoto(entryId, idx) {
+  const btn = $(`del-${entryId}-${idx}`);
+  const key = `${entryId}:${idx}`;
+  if (pendingPhotoKey !== key) {
+    pendingPhotoKey = key;
+    clearTimeout(pendingPhotoTimer);
+    if (btn) btn.textContent = 'กดอีกครั้งเพื่อยืนยันการลบ';
+    pendingPhotoTimer = setTimeout(() => {
+      pendingPhotoKey = null;
+      if (btn) btn.textContent = 'ลบรูปนี้';
+    }, 4000);
+    return;
+  }
+  clearTimeout(pendingPhotoTimer);
+  pendingPhotoKey = null;
+  const entry = findEntry(entryId);
+  if (!entry || !entry.photos[idx]) return;
+  const [removed] = entry.photos.splice(idx, 1);
+  if (removed.file && dirHandle) {
+    try {
+      const photosDir = await dirHandle.getDirectoryHandle('photos');
+      await photosDir.removeEntry(removed.file);
+    } catch (e) { /* file already missing */ }
+  }
+  saveHistory();
+  renderHistory();
+  showEntry(entry);
+}
 function viewEntry(id) { showEntry(findEntry(id)); }
 function printEntry(id) { showEntry(findEntry(id)); doPrint(); }
-function doPrint() {
+async function doPrint() {
   if (!$('print-area').classList.contains('show')) {
     alert('กรุณาสร้าง QR ก่อน หรือกด "ดู" จากประวัติ แล้วค่อยกดพิมพ์');
     return;
   }
+  await Promise.race([mapsReady, new Promise(r => setTimeout(r, 8000))]);
+  const area = $('print-area');
+  document.body.appendChild(area);
+  document.body.classList.add('printing');
+  const restore = () => {
+    document.body.classList.remove('printing');
+    $('preview-wrap').appendChild(area);
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
   try { window.print(); }
-  catch (e) { alert('หน้านี้พิมพ์ไม่ได้ในโหมดนี้ ให้ดับเบิลคลิกไฟล์เปิดด้วย Chrome หรือ Edge แล้วกด Ctrl+P'); }
+  catch (e) {
+    restore();
+    alert('หน้านี้พิมพ์ไม่ได้ในโหมดนี้ ให้ดับเบิลคลิกไฟล์เปิดด้วย Chrome หรือ Edge แล้วกด Ctrl+P');
+  }
 }
 let pendingDeleteId = null;
 let pendingDeleteTimer = null;
@@ -2912,7 +2983,7 @@ async function saveToFolder() {
       for (let i = 0; i < (h.photos || []).length; i++) {
         const p = h.photos[i];
         if (!p.file) {
-          p.file = `${h.id}_${i}.jpg`;
+          p.file = `${h.id}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`;
           const fh = await photosDir.getFileHandle(p.file, { create: true });
           const w = await fh.createWritable();
           await w.write(await blobFromDataUrl(p.src));
