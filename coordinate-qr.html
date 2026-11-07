@@ -2415,7 +2415,8 @@ var qrcode = function() {
     <div class="hint">วางพิกัดจาก Google Maps ได้ทั้งแบบทศนิยม (12.599900, 102.097700) และแบบองศา (12°35'59.6"N 102°05'51.7"E) ลงช่องไหนก็ได้ ระบบจะกรอกให้ทั้งสองช่อง</div>
 
     <label style="font-weight:normal;margin-top:10px"><input type="checkbox" id="force-new"> สร้างเป็นรายการใหม่แม้พิกัดซ้ำ (คนละบ้านในจุดเดียวกัน)</label>
-    <iframe id="map-preview" style="display:none;width:100%;height:220px;border:0;border-radius:8px;margin-top:10px" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <canvas id="map-preview" class="map-canvas" width="760" height="540" style="display:none"></canvas>
+    <a id="gmaps-link" target="_blank" rel="noopener" style="display:none;margin-top:8px;color:#2c5282;font-size:14px">เปิดตำแหน่งนี้ใน Google Maps</a>
     <div class="error" id="error"></div>
 
     <div class="actions">
@@ -2444,7 +2445,7 @@ var qrcode = function() {
       <button class="secondary" id="import-btn">นำเข้าไฟล์สำรอง</button>
       <input type="file" id="import-file" accept="application/json" style="display:none">
     </div>
-    <div class="toolbar"><button class="secondary" id="folder-btn">เลือกโฟลเดอร์เก็บข้อมูลในคอม</button><span class="small" id="folder-status">ยังไม่ได้เชื่อมต่อโฟลเดอร์</span></div>
+    <div class="toolbar"><button class="secondary" id="folder-btn">เลือกโฟลเดอร์เก็บข้อมูล (จะสร้างโฟลเดอร์ CoordData ให้)</button><span class="small" id="folder-status">ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้</span></div>
     <div class="small" id="storage-note"></div>
     <div id="history-wrap"></div>
   </section>
@@ -2559,6 +2560,17 @@ function cardHtml(entry) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+function fetchTile(z, x, y) {
+  const urls = [
+    `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`,
+    `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+  ];
+  return urls.reduce((p, u) => p.then(bmp => bmp || fetch(u)
+    .then(r => (r.ok ? r.blob() : null))
+    .then(b => (b ? createImageBitmap(b) : null))
+    .catch(() => null)), Promise.resolve(null));
+}
+
 function drawMap(canvas, lat, lng) {
   const W = canvas.width, H = canvas.height, z = 17, T = 256;
   const ctx = canvas.getContext('2d');
@@ -2572,12 +2584,8 @@ function drawMap(canvas, lat, lng) {
   const jobs = [];
   for (let tx = Math.floor(left / T); tx <= Math.floor((left + W) / T); tx++) {
     for (let ty = Math.floor(top / T); ty <= Math.floor((top + H) / T); ty++) {
-      jobs.push(new Promise(resolve => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => { ctx.drawImage(img, tx * T - left, ty * T - top, T, T); resolve(); };
-        img.onerror = () => resolve();
-        img.src = `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
+      jobs.push(fetchTile(z, tx, ty).then(bmp => {
+        if (bmp) ctx.drawImage(bmp, tx * T - left, ty * T - top, T, T);
       }));
     }
   }
@@ -2592,7 +2600,7 @@ function drawMap(canvas, lat, lng) {
     ctx.font = '16px sans-serif';
     ctx.fillStyle = 'rgba(0,0,0,.6)';
     ctx.textAlign = 'right';
-    ctx.fillText('© OpenStreetMap', W - 6, H - 6);
+    ctx.fillText('Esri, HERE, Garmin, OSM contributors', W - 6, H - 6);
   });
 }
 
@@ -2646,11 +2654,13 @@ function parsePasted(text) {
 
 let mapTimer = null;
 function updateMap() {
-  const frame = $('map-preview');
+  const cv = $('map-preview'), link = $('gmaps-link');
   const r = parseCoords($('lat').value, $('lng').value);
-  if (r.error) { frame.style.display = 'none'; frame.removeAttribute('src'); return; }
-  frame.src = `https://www.google.com/maps?q=${r.lat},${r.lng}&z=17&output=embed`;
-  frame.style.display = 'block';
+  if (r.error) { cv.style.display = 'none'; link.style.display = 'none'; return; }
+  drawMap(cv, r.lat, r.lng);
+  cv.style.display = 'block';
+  link.href = mapsUrl(r.lat, r.lng);
+  link.style.display = 'inline-block';
 }
 function scheduleMap() {
   clearTimeout(mapTimer);
@@ -2660,6 +2670,10 @@ function scheduleMap() {
 
 $('generate').addEventListener('click', async () => {
   $('error').textContent = '';
+  if (!dirHandle || !(await hasPermission(dirHandle))) {
+    $('error').textContent = 'กรุณากดปุ่ม "เลือกโฟลเดอร์เก็บข้อมูล" ในส่วนประวัติก่อน';
+    return;
+  }
   const res = parseCoords($('lat').value, $('lng').value);
   if (res.error) { $('error').textContent = res.error; return; }
   const outside = !isInThailand(res.lat, res.lng);
@@ -2844,6 +2858,7 @@ $('import-file').addEventListener('change', async e => {
 
 /* ---------- Save to a folder on this computer (Chrome / Edge) ---------- */
 let dirHandle = null;
+const FOLDER_NAME = 'CoordData';
 const DB_NAME = 'coordQR', DB_STORE = 'kv';
 function idbOpen() {
   return new Promise((res, rej) => {
@@ -2951,14 +2966,18 @@ $('folder-btn').addEventListener('click', async () => {
   }
   try {
     if (!dirHandle || !(await askPermission(dirHandle))) {
-      dirHandle = await showDirectoryPicker({ mode: 'readwrite' });
+      const picked = await showDirectoryPicker({ mode: 'readwrite', startIn: 'desktop' });
+      dirHandle = picked.name === FOLDER_NAME
+        ? picked
+        : await picked.getDirectoryHandle(FOLDER_NAME, { create: true });
     }
     await idbSet('dirHandle', dirHandle);
     await loadFromFolder();
     await saveToFolder();
-    $('folder-btn').textContent = 'เชื่อมต่อแล้ว';
+    $('folder-btn').textContent = `เชื่อมต่อแล้ว: ${dirHandle.name}`;
+    $('folder-status').textContent = `ข้อมูลและรูปจะถูกเก็บในโฟลเดอร์ "${dirHandle.name}" (อยู่ภายในโฟลเดอร์ที่คุณเลือก)`;
   } catch (e) {
-    $('folder-status').textContent = 'ยังไม่ได้เชื่อมต่อโฟลเดอร์';
+    $('folder-status').textContent = 'ยังไม่ได้เชื่อมต่อโฟลเดอร์ ต้องเชื่อมต่อก่อนจึงจะสร้างรายการได้';
   }
 });
 
@@ -2968,7 +2987,7 @@ $('folder-btn').addEventListener('click', async () => {
     if (h) {
       dirHandle = h;
       $('folder-btn').textContent = `เชื่อมต่อโฟลเดอร์เดิม: ${h.name}`;
-      $('folder-status').textContent = 'กดปุ่มด้านซ้ายเพื่อให้สิทธิ์เข้าถึงโฟลเดอร์อีกครั้ง';
+      $('folder-status').textContent = 'กดปุ่มด้านบนเพื่อให้สิทธิ์เข้าถึงโฟลเดอร์อีกครั้ง ก่อนสร้างรายการ';
     }
   } catch (e) { /* storage unavailable: ignore */ }
 })();
